@@ -24,20 +24,18 @@
 (setq ring-bell-function 'ignore) ; no annoying sound
 (when window-system (global-hl-line-mode t)) ; colour current line
 (when window-system (global-prettify-symbols-mode t)) ; symbols in gui
-
 (setq org-startup-indented t)
 (setq org-startup-folded t)
 
 (global-set-key (kbd "<s-return>") 'ansi-term) ; super + enter for terminal
 (defalias 'yes-or-no-p 'y-or-n-p) ; y or n for confirmation
 
-(global-set-key (kbd "C-x b") 'ibuffer)
-(global-set-key (kbd "C-x C-b") 'ido-switch-buffer)
-
 (setq ido-enable-flex-matching nil)
 (setq ido-create-new-buffer 'always)
 (setq ido-everywhere t)
 (ido-mode 1)
+(global-set-key (kbd "C-x b") 'ibuffer)
+(global-set-key (kbd "C-x C-b") 'ido-switch-buffer)
 
 (use-package dashboard
   :ensure t
@@ -70,13 +68,19 @@
 (use-package nord-theme
   :ensure t
   :config
+  (load-theme 'nord t)
   (setq nord-region-highlight "snowstorm")
   (setq nord-uniform-mode-lines t))
 
-(use-package elcord
+(use-package doom-modeline
   :ensure t
   :config
-  (elcord-mode))
+  (doom-modeline-mode 1))
+
+(use-package solaire-mode
+  :ensure t
+  :config
+  (solaire-global-mode +1))
 
 (use-package which-key
   :ensure t
@@ -217,6 +221,14 @@
         ("C-x t C-t" . treemacs-find-file)
         ("C-x t M-t" . treemacs-find-tag)))
 
+(use-package treemacs-projectile
+  :after (treemacs projectile)
+  :ensure t)
+
+(use-package treemacs-magit
+  :after (treemacs magit)
+  :ensure t)
+
 (unless (package-installed-p 'all-the-icons)
   (package-install 'all-the-icons))
 
@@ -229,27 +241,22 @@
   (package-install 'projectile))
 
 (use-package lsp-mode
-  :ensure
-  :commands lsp
-  :custom
-  ;; what to use when checking on-save. "check" is default, I prefer clippy
-  (lsp-rust-analyzer-cargo-watch-command "clippy")
-  (lsp-eldoc-render-all t)
-  (lsp-idle-delay 0.6)
-  ;; enable / disable the hints as you prefer:
-  (lsp-rust-analyzer-server-display-inlay-hints t)
-  (lsp-rust-analyzer-display-lifetime-elision-hints-enable "skip_trivial")
-  (lsp-rust-analyzer-display-chaining-hints t)
-  (lsp-rust-analyzer-display-lifetime-elision-hints-use-parameter-names nil)
-  (lsp-rust-analyzer-display-closure-return-type-hints t)
-  (lsp-rust-analyzer-display-parameter-hints nil)
-  (lsp-rust-analyzer-display-reborrow-hints nil)
-  :config
-  (add-hook 'lsp-mode-hook 'lsp-ui-mode)
-  (add-hook 'c-mode-hook 'lsp)
-  (add-hook 'c++-mode-hook 'lsp))
+  :init
+  ;; set prefix for lsp-command-keymap (few alternatives - "C-l", "C-c l")
+  (setq lsp-keymap-prefix "C-c l")
+  :hook (;; replace XXX-mode with concrete major-mode(e. g. python-mode)
+         (rust-mode . lsp)
+         (python-mode . lsp)
+         (c-mode . lsp)
 
-(use-package flycheck :ensure)
+         ;; if you want which-key integration
+         (lsp-mode . lsp-enable-which-key-integration))
+  :commands lsp)
+
+(use-package flycheck
+  :ensure t
+  :init (global-flycheck-mode))
+(push 'rustic-clippy flycheck-checkers)
 
 (use-package lsp-ui
   :ensure
@@ -259,18 +266,20 @@
   (lsp-ui-sideline-show-hover t)
   (lsp-ui-doc-enable nil))
 
-(use-package lsp-treemacs :commands lsp-treemacs-errors-list)
+(use-package lsp-treemacs
+  :commands lsp-treemacs-errors-list
+  :config
+  (lsp-treemacs-sync-mode 1))
 
 (when (executable-find "lldb-mi")
   (use-package dap-mode
     :ensure
     :config
-    (dap-ui-mode)
+    (dap-ui-mode 1)
     (dap-ui-controls-mode 1)
 
     (require 'dap-lldb)
     (require 'dap-gdb-lldb)
-    ;; installs .extension/vscode
     (dap-gdb-lldb-setup)
     (dap-register-debug-template
      "Rust::LLDB Run Configuration"
@@ -322,8 +331,10 @@
           (indent-for-tab-command)))))
 
 (use-package yasnippet
-    :ensure
-    :config
-    (yas-reload-all)
-    (add-hook 'prog-mode-hook 'yas-minor-mode)
-    (add-hook 'text-mode-hook 'yas-minor-mode))
+      :ensure
+      :hook ((lsp-mode . yas-minor-mode))
+      :config
+      (yas-reload-all)
+      (add-hook 'prog-mode-hook 'yas-minor-mode)
+      (add-hook 'text-mode-hook 'yas-minor-mode))
+(use-package yasnippet-snippets :ensure)
