@@ -1,147 +1,343 @@
 * Startup
 ** performance
-   #+begin_src emacs-lisp
-     ;; The default is 800 kilobytes.  Measured in bytes.
-     ;; (setq gc-cons-threshold (* 50 1000 1000))
-     (setq read-process-output-max (* 1024 1024)) ;; 1mb
-     (defun efs/display-startup-time ()
-       (message "Emacs loaded in %s with %d garbage collections."
-                (format "%.2f seconds"
-                        (float-time
-                         (time-subtract after-init-time before-init-time)))
-                gcs-done))
+#+begin_src emacs-lisp
+  (setq gc-cons-threshold (eval-when-compile (* 1024 1024 1024)))
+  (setq read-process-output-max (* 1024 1024)) ;; 1mb
+  (defun efs/display-startup-time ()
+    (message "Emacs loaded in %s with %d garbage collections."
+             (format "%.2f seconds"
+                     (float-time
+                      (time-subtract after-init-time before-init-time)))
+             gcs-done))
 
-     (add-hook 'emacs-startup-hook #'efs/display-startup-time)
+  (setq inhibit-startup-screen t)
+  (add-hook 'emacs-startup-hook #'efs/display-startup-time)
+#+end_src
 
-     #+end_src
-   
+** language
+#+begin_src emacs-lisp
+  (set-default-coding-systems 'utf-8)     ; Default to utf-8 encoding
+  (prefer-coding-system       'utf-8)     ; Add utf-8 at the front for automatic detection.
+  (set-terminal-coding-system 'utf-8)     ; Set coding system of terminal output
+  (set-keyboard-coding-system 'utf-8)     ; Set coding system for keyboard input on TERMINAL
+  (set-language-environment "English")    ; Set up multilingual environment
+#+end_src
+
+* Recovery
+#+begin_src emacs-lisp
+  (setq auto-save-list-file-prefix ; Prefix for generating auto-save-list-file-name
+        (expand-file-name ".auto-save-list/.saves-" user-emacs-directory)
+        auto-save-default t        ; Auto-save every buffer that visits a file
+        auto-save-timeout 20       ; Number of seconds between auto-save
+        auto-save-interval 200)    ; Number of keystrokes between auto-saves
+#+end_src
+
+* Backup
+#+begin_src emacs-lisp
+  (setq backup-directory-alist       ; File name patterns and backup directory names.
+        `(("." . ,(expand-file-name "backups" user-emacs-directory)))
+        make-backup-files t          ; Backup of a file the first time it is saved.
+        vc-make-backup-files t       ; No backup of files under version contr
+        backup-by-copying t          ; Don't clobber symlinks
+        version-control t            ; Version numbers for backup files
+        delete-old-versions t        ; Delete excess backup files silently
+        kept-old-versions 6          ; Number of old versions to keep
+        kept-new-versions 9          ; Number of new versions to keep
+        delete-by-moving-to-trash t) ; Delete files to trash
+#+end_src
+
 
 * Interaction
+** recentf
+#+begin_src emacs-lisp
+  (require 'recentf)
+  (global-set-key (kbd "C-x C-r") 'ido-recentf-open)
+  (setq recentf-max-menu-items 10
+        recentf-max-saved-items 100)
+  (let (message-log-max)
+    (recentf-mode 1))
+  (defun ido-recentf-open ()
+    "Use `ido-completing-read' to \\[find-file] a recent file"
+    (interactive)
+    (if (find-file (ido-completing-read "Find recent file: " recentf-list))
+        (message "Opening file...")
+      (message "Aborting")))
+#+end_src
+** minad
+#+begin_src emacs-lisp
+(use-package jinx
+  :hook (emacs-startup . global-jinx-mode)
+  :bind (("M-$" . jinx-correct)
+         ("C-M-$" . jinx-languages)))
+
+  (use-package org-modern :ensure)
+  (add-hook 'org-mode-hook #'org-modern-mode)
+  (add-hook 'org-agenda-finalize-hook #'org-modern-agenda)
+
+  (use-package vertico
+    :ensure
+    :init
+    (vertico-mode))
+
+  (use-package marginalia
+    :ensure
+    :bind (:map minibuffer-local-map
+                ("M-A" . marginalia-cycle))
+    :init
+    (marginalia-mode))
+
+  (use-package consult
+    :ensure
+    :bind (;; C-c bindings in `mode-specific-map'
+           ("C-c M-x" . consult-mode-command)
+           ("C-c h" . consult-history)
+           ("C-c k" . consult-kmacro)
+           ("C-c m" . consult-man)
+           ("C-c i" . consult-info)
+           ([remap Info-search] . consult-info)
+           ;; C-x bindings in `ctl-x-map'
+           ("C-x M-:" . consult-complex-command)     ;; orig. repeat-complex-command
+           ("C-x b" . consult-buffer)                ;; orig. switch-to-buffer
+           ("C-x 4 b" . consult-buffer-other-window) ;; orig. switch-to-buffer-other-window
+           ("C-x 5 b" . consult-buffer-other-frame)  ;; orig. switch-to-buffer-other-frame
+           ("C-x t b" . consult-buffer-other-tab)    ;; orig. switch-to-buffer-other-tab
+           ("C-x r b" . consult-bookmark)            ;; orig. bookmark-jump
+           ("C-x p b" . consult-project-buffer)      ;; orig. project-switch-to-buffer
+           ;; Custom M-# bindings for fast register access
+           ("M-#" . consult-register-load)
+           ("M-'" . consult-register-store)          ;; orig. abbrev-prefix-mark (unrelated)
+           ("C-M-#" . consult-register)
+           ;; Other custom bindings
+           ("M-y" . consult-yank-pop)                ;; orig. yank-pop
+           ;; M-g bindings in `goto-map'
+           ("M-g e" . consult-compile-error)
+           ("M-g f" . consult-flymake)               ;; Alternative: consult-flycheck
+           ("M-g g" . consult-goto-line)             ;; orig. goto-line
+           ("M-g M-g" . consult-goto-line)           ;; orig. goto-line
+           ("M-g o" . consult-outline)               ;; Alternative: consult-org-heading
+           ("M-g m" . consult-mark)
+           ("M-g k" . consult-global-mark)
+           ("M-g i" . consult-imenu)
+           ("M-g I" . consult-imenu-multi)
+           ;; M-s bindings in `search-map'
+           ("M-s d" . consult-find)                  ;; Alternative: consult-fd
+           ("M-s c" . consult-locate)
+           ("M-s g" . consult-grep)
+           ("M-s G" . consult-git-grep)
+           ("M-s r" . consult-ripgrep)
+           ("M-s l" . consult-line)
+           ("M-s L" . consult-line-multi)
+           ("M-s k" . consult-keep-lines)
+           ("M-s u" . consult-focus-lines)
+           ;; Isearch integration
+           ("M-s e" . consult-isearch-history)
+           :map isearch-mode-map
+           ("M-e" . consult-isearch-history)         ;; orig. isearch-edit-string
+           ("M-s e" . consult-isearch-history)       ;; orig. isearch-edit-string
+           ("M-s l" . consult-line)                  ;; needed by consult-line to detect isearch
+           ("M-s L" . consult-line-multi)            ;; needed by consult-line to detect isearch
+           ;; Minibuffer history
+           :map minibuffer-local-map
+           ("M-s" . consult-history)                 ;; orig. next-matching-history-element
+           ("M-r" . consult-history))                ;; orig. previous-matching-history-element
+
+    :hook (completion-list-mode . consult-preview-at-point-mode)
+    :init
+    (advice-add #'register-preview :override #'consult-register-window)
+    (setq register-preview-delay 0.5)
+    (setq xref-show-xrefs-function #'consult-xref
+          xref-show-definitions-function #'consult-xref)
+    :config
+    (consult-customize
+     consult-theme :preview-key '(:debounce 0.2 any)
+     consult-ripgrep consult-git-grep consult-grep
+     consult-bookmark consult-recent-file consult-xref
+     consult--source-bookmark consult--source-file-register
+     consult--source-recent-file consult--source-project-recent-file
+     :preview-key '(:debounce 0.4 any))
+    (setq consult-narrow-key "<"))
+#+end_src
+
+** embark
+#+begin_src emacs-lisp
+  (use-package embark
+    :ensure t
+    :bind
+    (("C-." . embark-act)         ;; pick some comfortable binding
+     ("C-;" . embark-dwim)        ;; good alternative: M-.
+     ("C-h B" . embark-bindings)) ;; alternative for `describe-bindings'
+    :init
+    (setq prefix-help-command #'embark-prefix-help-command)
+    :config
+    (add-to-list 'display-buffer-alist
+                 '("\\`\\*Embark Collect \\(Live\\|Completions\\)\\*"
+                   nil
+                   (window-parameters (mode-line-format . none)))))
+
+  (use-package embark-consult
+    :ensure t ; only need to install it, embark loads it after consult if found
+    :hook
+    (embark-collect-mode . consult-preview-at-point-mode))
+#+end_src
+
 ** UI
 #+begin_src emacs-lisp
-    (tool-bar-mode -1) ; tool bar
-    (menu-bar-mode -1) ; menu bar
-    (scroll-bar-mode -1) ; scroll bar
-    (global-display-line-numbers-mode) ; line numbers
-    (show-paren-mode 1) ; highlights brackets
-    (electric-pair-mode 1) ; auto pair
-    (setq tab-width 2) 
-    (setq tab-always-indent 'complete)
-    (setq-default cursor-type 'box) 
-    (setq show-paren-style 'mixed) ; style of bracket highlights
-    (setq scroll-conservatively 100) ; smooth scroll
-    (setq ring-bell-function 'ignore) ; no annoying sound
-    (when window-system (global-hl-line-mode t)) ; colour current line
-    (when window-system (global-prettify-symbols-mode t)) ; symbols in gui
-    (setq org-startup-indented t)
-    (setq org-startup-folded t)
+  (tool-bar-mode -1) ; tool bar
+  (menu-bar-mode -1) ; menu bar
+  (scroll-bar-mode -1) ; scroll bar
+  (global-display-line-numbers-mode) ; line numbers
+  (show-paren-mode 1) ; highlights brackets
+  (electric-pair-mode 1) ; auto pair
+  (setq pixel-scroll-precision-mode 1)
+  (setq tab-width 2)
+  (setq tab-always-indent 'complete)
+  (setq-default cursor-type 'box)
+  (setq show-paren-style 'mixed) ; style of bracket highlights
+  (setq scroll-conservatively 100) ; smooth scroll
+  (setq ring-bell-function 'ignore) ; no annoying sound
+  (when window-system (global-hl-line-mode t)) ; colour current line
+  (when window-system (global-prettify-symbols-mode t)) ; symbols in gui
+  (setq org-startup-indented t)
+  (setq org-startup-folded t)
+
+  (use-package dimmer :ensure)
+  (setq dimmer-mode t)
 #+end_src
 
 ** Shortcuts
    
 # OPENS TERMINAL
 #+begin_src emacs-lisp
-  (global-set-key (kbd "<s-return>") 'ansi-term) ; super + enter for terminal
+  (global-unset-key (kbd "C-z"))
   (defalias 'yes-or-no-p 'y-or-n-p) ; y or n for confirmation
 #+end_src
 
 ** IDO
-   #+begin_src emacs-lisp
-     (setq ido-enable-flex-matching nil)
-     (setq ido-create-new-buffer 'always)
-     (setq ido-everywhere t)
-     (ido-mode 1)
-     (global-set-key (kbd "C-x b") 'ibuffer)
-     (global-set-key (kbd "C-x C-b") 'ido-switch-buffer)
-   #+end_src
+#+begin_src emacs-lisp
+  (setq ido-enable-flex-matching nil)
+  (setq ido-create-new-buffer 'always)
+  (setq ido-everywhere t)
+  (ido-mode 1)
+;  (global-set-key (kbd "C-x b") 'ibuffer)
+;  (global-set-key (kbd "C-x C-b") 'ido-switch-buffer)
+#+end_src
    
-   
-* Dashboard
-** dashboard install
-   #+begin_src emacs-lisp
-     (use-package dashboard
-       :ensure t
-       :config
-       (dashboard-setup-startup-hook))
-   #+end_src
+* org-mode
+** general
+#+begin_src emacs-lisp
+  (setq-default org-directory "~/Documents/org"
+                org-ellipsis " …"              ; Nicer ellipsis
+                org-tags-column 1              ; Tags next to header title
+                org-hide-emphasis-markers t    ; Hide markers
+                org-cycle-separator-lines 2    ; Number of empty lines between sections
+                org-use-tag-inheritance nil    ; Tags ARE NOT inherited
+                org-use-property-inheritance t ; Properties ARE inherited
+                org-indent-indentation-per-level 2 ; Indentation per level
+                org-link-use-indirect-buffer-for-internals t ; Indirect buffer for internal links
+                org-fontify-quote-and-verse-blocks t ; Specific face for quote and verse blocks
+                org-return-follows-link nil    ; Follow links when hitting return
+                org-image-actual-width nil     ; Resize image to window width
+                org-indirect-buffer-display 'other-window ; Tab on a task expand it in a new window
+                org-outline-path-complete-in-steps nil) ; No steps in path display
+#+end_src
+** agenda
+#+begin_src emacs-lisp
+  (bind-key "C-c a" #'org-agenda)
 
-** Configuration
-   #+begin_src emacs-lisp
-     ;; Set the title
-     (setq dashboard-banner-logo-title "GNU Mikoto Emacs")
-     ;; Set the banner
-     (setq dashboard-startup-banner "~/.emacs.d/splash/emacs.png")
-     ;; Value can be
-     ;; 'official which displays the official emacs logo
-     ;; 'logo which displays an alternative emacs logo
-     ;; 1, 2 or 3 which displays one of the text banners
-     ;; "path/to/your/image.png" or "path/to/your/text.txt" which displays whatever image/text you would prefer
 
-     ;; Content is not centered by default. To center, set
-     (setq dashboard-center-content t)
+  (setq org-agenda-files (list "~/Documents/org/agenda.org")
+        org-agenda-diary-file (expand-file-name "diary" user-emacs-directory))
 
-     ;; To disable shortcut "jump" indicators for each section, set
-     (setq dashboard-show-shortcuts t)
 
-     (setq dashboard-set-file-icons t)
-     (setq dashboard-items '((recents  . 5)
-                             (bookmarks . 5)
-                             (projects . 5)
-                             (agenda . 5)
-                             (registers . 5)))
-   #+end_src
+  (setq org-agenda-window-setup 'current-window
+        org-agenda-restore-windows-after-quit t
+        org-agenda-show-all-dates nil
+        org-agenda-time-in-grid t
+        org-agenda-show-current-time-in-grid t
+        org-agenda-start-on-weekday 1
+        org-agenda-span 7
+        org-agenda-hide-tags-regexp "." ; No tags
+                                          ; org-agenda-hide-tags-regexp nil) ; All tags
+        org-agenda-tags-column 0
+                                          ; org-agenda-tags-column -79)      ; Left aling
+        org-agenda-block-separator nil
+        org-agenda-category-icon-alist nil
+        org-agenda-skip-deadline-if-done t
+        org-agenda-skip-scheduled-if-done t
+        org-agenda-sticky t)
+
+#+end_src
+
 
 
 * Packages
-** nord-theme
+** magit
 #+begin_src emacs-lisp
-  (use-package nord-theme
-    :ensure t
-    :config
-    (load-theme 'nord t)
-    (setq nord-region-highlight "snowstorm")
-    (setq nord-uniform-mode-lines t))
+  (use-package magit :ensure)
+  (use-package transient :ensure)
 #+end_src
-** doom-modeline
+** ui
 #+begin_src emacs-lisp
-  (use-package doom-modeline
-    :ensure t
+  (use-package dashboard :ensure
+    :config
+    (dashboard-setup-startup-hook))
+  (setq dashboard-banner-logo-title '"GNU Mikoto Emacs"
+        dashboard-startup-banner "~/.emacs.d/splash/emacs.png"
+        dashboard-set-file-icons t
+        dashboard-center-content t
+        dashboard-display-icons-p t
+        dashboard-icon-type 'nerd-icons
+        dashboard-items '((recents  . 10)
+                          (bookmarks . 5)
+                          ;; (projects . 5)
+                          (agenda . 5)
+                          ;;(registers . 5)
+                          ))
+
+  (use-package nerd-icons :ensure)
+  (use-package all-the-icons :ensure)
+  (use-package doom-modeline :ensure
     :config
     (doom-modeline-mode 1))
+
+  (use-package doom-themes
+  :ensure t
+  :config
+  ;; Global settings (defaults)
+  (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
+        doom-themes-enable-italic t) ; if nil, italics is universally disabled
+  (load-theme 'doom-gruvbox t)
+  (doom-themes-org-config))
 #+end_src
-** solitare-mode
+** documents
 #+begin_src emacs-lisp
-  (use-package solaire-mode
-    :ensure t
+  (use-package pdf-tools :ensure
+    :defer t
+    :magic ("%PDF" . pdf-view-mode)
     :config
-    (solaire-global-mode +1))
+    (pdf-tools-install)
+    :hook(
+          (pdf-tools-enabled . pdf-view-themed-minor-mode)))
+  (use-package nov :ensure
+    :config
+    (add-to-list 'auto-mode-alist '("\\.epub\\'" . nov-mode)))
 #+end_src
 ** which-key
-   #+begin_src emacs-lisp
-     (use-package which-key
-       :ensure t
-       :init
-       (which-key-mode))
-   #+end_src
-
-** org-bullets
-   
-   #+begin_src emacs-lisp
-     (use-package org-bullets
-	    :ensure t
-	    :config
-	    (add-hook 'org-mode-hook (lambda () (org-bullets-mode))))
-   #+end_src
+#+begin_src emacs-lisp
+  (use-package which-key
+    :ensure t
+    :init
+    (which-key-mode))
+#+end_src
 
 ** vertical-ido
-   #+begin_src emacs-lisp
-     (use-package ido-vertical-mode
-       :ensure t
-       :init
-       (ido-vertical-mode 1))
-     (setq ido-vertical-define-keys 'C-n-and-C-p-only)
-   #+end_src
-   
+#+begin_src emacs-lisp
+  (use-package ido-vertical-mode
+    :ensure t
+    :init
+    (ido-vertical-mode 1))
+  (setq ido-vertical-define-keys 'C-n-and-C-p-only)
+#+end_src
 ** avy
 #+begin_src emacs-lisp
   (use-package avy
@@ -149,144 +345,6 @@
     :bind
     ("M-s" . avy-goto-char))
 #+end_src
-** rustic
-   #+begin_src emacs-lisp
-     (use-package rustic
-       :ensure
-       :bind (:map rustic-mode-map
-                   ("M-j" . lsp-ui-imenu)
-                   ("M-?" . lsp-find-references)
-                   ("C-c C-c l" . flycheck-list-errors)
-                   ("C-c C-c a" . lsp-execute-code-action)
-                   ("C-c C-c r" . lsp-rename)
-                   ("C-c C-c q" . lsp-workspace-restart)
-                   ("C-c C-c Q" . lsp-workspace-shutdown)
-                   ("C-c C-c s" . lsp-rust-analyzer-status))
-       :config
-       ;; uncomment for less flashiness
-       ;; (setq lsp-eldoc-hook nil)
-       ;; (setq lsp-enable-symbol-highlighting nil)
-       ;; (setq lsp-signature-auto-activate nil)
-
-       ;; comment to disable rustfmt on save
-       (setq rustic-format-on-save t)
-       (add-hook 'rustic-mode-hook 'rk/rustic-mode-hook))
-
-     (defun rk/rustic-mode-hook ()
-       ;; so that run C-c C-c C-r works without having to confirm, but don't try to
-       ;; save rust buffers that are not file visiting. Once
-       ;; https://github.com/brotzeit/rustic/issues/253 has been resolved this should
-       ;; no longer be necessary.
-       (when buffer-file-name
-         (setq-local buffer-save-without-query t))
-       (add-hook 'before-save-hook 'lsp-format-buffer nil t))
-   #+end_src
-   
-** treemacs
-   #+begin_src emacs-lisp
-     (use-package treemacs
-       :ensure t
-       :defer t
-       :init
-       (with-eval-after-load 'winum
-         (define-key winum-keymap (kbd "M-0") #'treemacs-select-window))
-       :config
-       (progn
-         (setq treemacs-collapse-dirs                   (if treemacs-python-executable 3 0)
-               treemacs-deferred-git-apply-delay        0.5
-               treemacs-directory-name-transformer      #'identity
-               treemacs-display-in-side-window          t
-               treemacs-eldoc-display                   'simple
-               treemacs-file-event-delay                2000
-               treemacs-file-extension-regex            treemacs-last-period-regex-value
-               treemacs-file-follow-delay               0.2
-               treemacs-file-name-transformer           #'identity
-               treemacs-follow-after-init               t
-               treemacs-expand-after-init               t
-               treemacs-find-workspace-method           'find-for-file-or-pick-first
-               treemacs-git-command-pipe                ""
-               treemacs-goto-tag-strategy               'refetch-index
-               treemacs-header-scroll-indicators        '(nil . "^^^^^^")
-               treemacs-hide-dot-git-directory          t
-               treemacs-indentation                     2
-               treemacs-indentation-string              " "
-               treemacs-is-never-other-window           nil
-               treemacs-max-git-entries                 5000
-               treemacs-missing-project-action          'ask
-               treemacs-move-forward-on-expand          nil
-               treemacs-no-png-images                   nil
-               treemacs-no-delete-other-windows         t
-               treemacs-project-follow-cleanup          nil
-               treemacs-persist-file                    (expand-file-name ".cache/treemacs-persist" user-emacs-directory)
-               treemacs-position                        'left
-               treemacs-read-string-input               'from-child-frame
-               treemacs-recenter-distance               0.1
-               treemacs-recenter-after-file-follow      nil
-               treemacs-recenter-after-tag-follow       nil
-               treemacs-recenter-after-project-jump     'always
-               treemacs-recenter-after-project-expand   'on-distance
-               treemacs-litter-directories              '("/node_modules" "/.venv" "/.cask")
-               treemacs-show-cursor                     nil
-               treemacs-show-hidden-files               t
-               treemacs-silent-filewatch                nil
-               treemacs-silent-refresh                  nil
-               treemacs-sorting                         'alphabetic-asc
-               treemacs-select-when-already-in-treemacs 'move-back
-               treemacs-space-between-root-nodes        t
-               treemacs-tag-follow-cleanup              t
-               treemacs-tag-follow-delay                1.5
-               treemacs-text-scale                      nil
-               treemacs-user-mode-line-format           nil
-               treemacs-user-header-line-format         nil
-               treemacs-wide-toggle-width               70
-               treemacs-width                           35
-               treemacs-width-increment                 1
-               treemacs-width-is-initially-locked       t
-               treemacs-workspace-switch-cleanup        nil)
-
-         ;; The default width and height of the icons is 22 pixels. If you are
-         ;; using a Hi-DPI display, uncomment this to double the icon size.
-         ;;(treemacs-resize-icons 44)
-
-         (treemacs-follow-mode t)
-         (treemacs-filewatch-mode t)
-         (treemacs-fringe-indicator-mode 'always)
-         (when treemacs-python-executable
-           (treemacs-git-commit-diff-mode t))
-
-         (pcase (cons (not (null (executable-find "git")))
-                      (not (null treemacs-python-executable)))
-           (`(t . t)
-            (treemacs-git-mode 'deferred))
-           (`(t . _)
-            (treemacs-git-mode 'simple)))
-
-         (treemacs-hide-gitignored-files-mode nil))
-       :bind
-       (:map global-map
-             ("M-0"       . treemacs-select-window)
-             ("C-x t 1"   . treemacs-delete-other-windows)
-             ("C-x t t"   . treemacs)
-             ("C-x t d"   . treemacs-select-directory)
-             ("C-x t B"   . treemacs-bookmark)
-             ("C-x t C-t" . treemacs-find-file)
-             ("C-x t M-t" . treemacs-find-tag)))
-
-     (use-package treemacs-projectile
-       :after (treemacs projectile)
-       :ensure t)
-
-     (use-package treemacs-magit
-       :after (treemacs magit)
-       :ensure t)
-     #+end_src
-   
-** all the icons
-#+begin_src emacs-lisp
-    (unless (package-installed-p 'all-the-icons)
-      (package-install 'all-the-icons))
-#+end_src
-
 ** Page break lines
 #+begin_src emacs-lisp
   (use-package page-break-lines
@@ -294,128 +352,84 @@
     :config
     (page-break-lines-mode))
 #+end_src
+
+* Programming
 ** Projectile
 #+begin_src emacs-lisp
-  (unless (package-installed-p 'projectile)
-    (package-install 'projectile))
+  (use-package projectile :ensure)
 #+end_src
-
-
-
-
-* LSP
-** lsp-mode
-   #+begin_src emacs-lisp
-     (use-package lsp-mode
-       :init
-       ;; set prefix for lsp-command-keymap (few alternatives - "C-l", "C-c l")
-       (setq lsp-keymap-prefix "C-c l")
-       :hook (;; replace XXX-mode with concrete major-mode(e. g. python-mode)
-              (rust-mode . lsp)
-              (python-mode . lsp)
-              (c-mode . lsp)
-              
-              ;; if you want which-key integration
-              (lsp-mode . lsp-enable-which-key-integration))
-       :commands lsp)
-   #+end_src
-** flycheck
-   #+begin_src emacs-lisp
-     (use-package flycheck
-       :ensure t
-       :init (global-flycheck-mode))
-     (push 'rustic-clippy flycheck-checkers)
-   #+end_src
-** lsp-ui
-   #+begin_src emacs-lisp
-     (use-package lsp-ui
-       :ensure
-       :commands lsp-ui-mode
-       :custom
-       (lsp-ui-peek-always-show t)
-       (lsp-ui-sideline-show-hover t)
-       (lsp-ui-doc-enable nil))
-   #+end_src
-** lsp-treemacs
-   #+begin_src emacs-lisp
-     (use-package lsp-treemacs
-       :commands lsp-treemacs-errors-list
-       :config
-       (lsp-treemacs-sync-mode 1))
-   #+end_src
-** dap-mode
-   #+begin_src emacs-lisp
-     (when (executable-find "lldb-mi")
-       (use-package dap-mode
-         :ensure
-         :config
-         (dap-ui-mode 1)
-         (dap-ui-controls-mode 1)
-
-         (require 'dap-lldb)
-         (require 'dap-gdb-lldb)
-         (dap-gdb-lldb-setup)
-         (dap-register-debug-template
-          "Rust::LLDB Run Configuration"
-          (list :type "lldb"
-                :request "launch"
-                :name "LLDB::Run"
-                :gdbpath "rust-lldb"
-                ;; uncomment if lldb-mi is not in PATH
-                ;; :lldbmipath "path/to/lldb-mi"
-                ))))
-   #+end_src
-      
+** rustic
+#+begin_src emacs-lisp
+  (use-package rustic :ensure)
+  (setq rustic-format-on-save t)
+  (setq rustic-lsp-client 'eglot)
+#+end_src
+** zig-mode
+#+begin_src emacs-lisp
+  (use-package zig-mode :ensure)
+  (add-to-list 'auto-mode-alist '("\\.zig\\'" . zig-mode))
+#+end_src
+** tree sitter
+#+begin_src emacs-lisp
+  (use-package tree-sitter :ensure)
+  (use-package tree-sitter-langs :ensure)
+  (setq global-tree-sitter-mode 1)
+#+end_src
+** eglot
+#+begin_src emacs-lisp
+  (add-hook 'python-mode-hook 'eglot-ensure)
+  (add-hook 'c-mode-hook 'eglot-ensure)
+  (add-hook 'c++-mode-hook 'eglot-ensure)
+#+end_src
+** helm
+#+begin_src emacs-lisp
+  (use-package helm :ensure)
+#+end_src
 ** company
-   #+begin_src emacs-lisp
-     (use-package company
-       :ensure
-       :bind
-       (:map company-active-map
-                   ("C-n". company-select-next)
-                   ("C-p". company-select-previous)
-                   ("M-<". company-select-first)
-                   ("M->". company-select-last))
-       (:map company-mode-map
-             ("<tab>". tab-indent-or-complete)
-             ("TAB". tab-indent-or-complete)))
+#+begin_src emacs-lisp
+  (use-package company
+    :ensure
+    :bind
+    (:map company-active-map
+          ("C-n". company-select-next)
+          ("C-p". company-select-previous)
+          ("M-<". company-select-first)
+          ("M->". company-select-last))
+    (:map company-mode-map
+          ("<tab>". tab-indent-or-complete)
+          ("TAB". tab-indent-or-complete)))
 
-     (defun company-yasnippet-or-completion ()
-       (interactive)
-       (or (do-yas-expand)
-           (company-complete-common)))
+  (add-hook 'after-init-hook 'global-company-mode t)
 
-     (defun check-expansion ()
-       (save-excursion
-         (if (looking-at "\\_>") t
-           (backward-char 1)
-           (if (looking-at "\\.") t
-             (backward-char 1)
-             (if (looking-at "::") t nil)))))
+  (defun company-yasnippet-or-completion ()
+    (interactive)
+    (or (do-yas-expand)
+        (company-complete-common)))
 
-     (defun do-yas-expand ()
-       (let ((yas/fallback-behavior 'return-nil))
-         (yas/expand)))
+  (defun check-expansion ()
+    (save-excursion
+      (if (looking-at "\\_>") t
+        (backward-char 1)
+        (if (looking-at "\\.") t
+          (backward-char 1)
+          (if (looking-at "::") t nil)))))
 
-     (defun tab-indent-or-complete ()
-       (interactive)
-       (if (minibufferp)
-           (minibuffer-complete)
-         (if (or (not yas/minor-mode)
-                 (null (do-yas-expand)))
-             (if (check-expansion)
-                 (company-complete-common)
-               (indent-for-tab-command)))))
-   #+end_src   
+  (defun do-yas-expand ()
+    (let ((yas/fallback-behavior 'return-nil))
+      (yas/expand)))
 
+  (defun tab-indent-or-complete ()
+    (interactive)
+    (if (minibufferp)
+        (minibuffer-complete)
+      (if (or (not yas/minor-mode)
+              (null (do-yas-expand)))
+          (if (check-expansion)
+              (company-complete-common)
+            (indent-for-tab-command)))))
+#+end_src
 ** yasnippet
 #+begin_src emacs-lisp
-    (use-package yasnippet
-          :ensure
-          :hook ((lsp-mode . yas-minor-mode))
-          :config
-          (yas-reload-all)
-          (add-hook 'prog-mode-hook 'yas-minor-mode)
-          (add-hook 'text-mode-hook 'yas-minor-mode))
-    (use-package yasnippet-snippets :ensure)
+  (use-package yasnippet :ensure)
+  (use-package yasnippet-snippets :ensure)
 #+end_src
